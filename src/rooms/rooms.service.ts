@@ -1,21 +1,8 @@
 import { Injectable } from '@nestjs/common';
-
-export type PlayerRole = 'screen' | 'controller';
-
-export interface Player {
-  id: string;       // socket.id
-  name?: string;
-  role: PlayerRole;
-}
-
-export interface Room {
-  id: string;           // код комнаты
-  screenId?: string;    // socket.id экрана
-  players: Player[];    // включая экран (если хочешь)
-}
+import { PlayerRole, Room } from './rooms.types';
 
 @Injectable()
-export class GameService {
+export class RoomsService {
   private rooms = new Map<string, Room>();
 
   createRoom(roomId: string, screenSocketId: string, name?: string): Room {
@@ -26,7 +13,7 @@ export class GameService {
       id: roomId,
       screenId: screenSocketId,
       players: [{ id: screenSocketId, name, role: 'screen' }],
-    };
+    }
 
     this.rooms.set(roomId, room);
     return room;
@@ -36,12 +23,10 @@ export class GameService {
     const room = this.rooms.get(roomId);
     if (!room) return null;
 
-    // если это экран и его ещё нет — назначаем
     if (role === 'screen') {
       room.screenId = socketId;
     }
 
-    // не дублируем игрока
     if (!room.players.some((p) => p.id === socketId)) {
       room.players.push({ id: socketId, name, role });
     }
@@ -60,7 +45,6 @@ export class GameService {
 
       const after = room.players.length;
 
-      // если комната опустела — удаляем
       if (after === 0) {
         this.rooms.delete(room.id);
         return room;
@@ -75,5 +59,16 @@ export class GameService {
 
   getRoom(roomId: string): Room | undefined {
     return this.rooms.get(roomId);
+  }
+
+  assignGame(roomId: string, gameType: GameType) {
+    const room = this.rooms.get(roomId);
+    if (room) room.gameType = gameType;
+  }
+
+  getRoomBySocket(socketId: string): Room | undefined {
+    return [...this.rooms.values()].find((room) =>
+      room.players.some((p) => p.id === socketId),
+    );
   }
 }
