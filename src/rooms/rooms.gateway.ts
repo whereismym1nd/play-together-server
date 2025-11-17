@@ -9,7 +9,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RoomsService } from './rooms.service';
-import { GameRouterService } from 'src/games/gamesRouter.service';
+import { GameRouterService } from 'src/games/gamesCore/gamesRouter.service';
+import { nanoid } from 'nanoid';
 
 @WebSocketGateway({
   cors: {
@@ -33,7 +34,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log('client disconnected', client.id);
     const room = this.roomsService.leaveRoom(client.id);
     if (room) {
-      this.server.to(room.id).emit('room:update', room);
+      this.server.to(room.id).emit('room:update', this.roomsService.serializeRoom(room));
     }
   }
 
@@ -41,44 +42,59 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('room:create')
   handleCreateRoom(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; name?: string },
+    @MessageBody() data: { roomId?: string; name?: string },
   ) {
-    const { roomId, name } = data;
+    let roomId: string;
+    const name = data.name || 'TV';
+
+    if (data.roomId) {
+      roomId = data.roomId;
+    } else {
+      roomId = nanoid(6).toUpperCase();
+    }
 
     const room = this.roomsService.createRoom(roomId, client.id, name);
     client.join(roomId);
 
-    // можно отправить только этому клиенту
-    client.emit('room:created', room);
-
-    // или состоянием на всех в комнате
-    this.server.to(roomId).emit('room:update', room);
+    client.emit('room:created', this.roomsService.serializeRoom(room));
   }
 
   // Телефон или TV присоединяются к комнате
   @SubscribeMessage('room:join')
   handleJoinRoom(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: JoinRoomDto,
-  ) {
+    @MessageBody() payload: any,
+    @ConnectedSocket() socket: Socket,
+  ): { success: boolean; message?: string } {
     const { roomId, role, name } = payload;
-
-    const room = this.roomsService.joinRoom(roomId, client.id, role, name);
+    const room = this.roomsService.joinRoom(roomId, socket.id, role, name);
     if (!room) {
-      client.emit('room:error', { message: 'Room not found' });
-      return;
+      return { success: false, message: "Комната не найдена" };
     }
+    socket.join(roomId);
+    this.server.to(roomId).emit('room:update', this.roomsService.serializeRoom(room));
+    return { success: true };
+  }
 
-    client.join(roomId);
+  // Готовность игрока
+  @SubscribeMessage('player:ready')
+  handleSetPlayerReady(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
+    const { ready } = payload;
 
-    // отправляем обновлённое состояние всем в комнате
-    this.server.to(roomId).emit('room:update', room);
+    this.roomsService.setReady(client.id, ready);
+    const room = this.roomsService.getRoomBySocket(client.id);
+    if (room?.screenId) {
+      this.server.to(room.screenId).emit('room:update', this.roomsService.serializeRoom(room));
+    }
   }
 
   @SubscribeMessage('game-event')
   handleGameEvent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload
+    @MessageBody() payload: any
   ) {
     const room = this.roomsService.getRoomBySocket(client.id);
     if (!room || !room.gameType) return;

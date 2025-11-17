@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { PlayerRole, Room } from './rooms.types';
+import { GameType, PlayerRole, Room } from './rooms.types';
 
 @Injectable()
 export class RoomsService {
   private rooms = new Map<string, Room>();
+
+  serializeRoom(room: Room) {
+    return {
+      ...room,
+      players: room.players.filter((p) => p.role !== 'screen'),
+    };
+  }
 
   createRoom(roomId: string, screenSocketId: string, name?: string): Room {
     const exists = this.rooms.get(roomId);
@@ -12,10 +19,12 @@ export class RoomsService {
     const room: Room = {
       id: roomId,
       screenId: screenSocketId,
-      players: [{ id: screenSocketId, name, role: 'screen' }],
+      players: [{ id: screenSocketId, name, role: 'screen', ready: true }],
     }
 
     this.rooms.set(roomId, room);
+    console.log(this.rooms);
+
     return room;
   }
 
@@ -24,23 +33,53 @@ export class RoomsService {
     if (!room) return null;
 
     if (role === 'screen') {
-      room.screenId = socketId;
+      return null;
+      // room.screenId = socketId;
     }
 
     if (!room.players.some((p) => p.id === socketId)) {
-      room.players.push({ id: socketId, name, role });
+      if (!room.players.some((p) => p.role === 'host')) {
+        room.players.push({
+          id: socketId,
+          name,
+          role: 'host',
+          ready: true
+        });
+      } else {
+        room.players.push({
+          id: socketId,
+          name,
+          role,
+          ready: false
+        });
+      }
     }
 
     return room;
   }
 
+  setReady(socketId: string, ready: boolean) {
+    for (const room of this.rooms.values()) {
+      const player = room.players.find((p) => p.id === socketId);
+      if (player) player.ready = ready;
+    }
+  }
+
   leaveRoom(socketId: string): Room | null {
     for (const room of this.rooms.values()) {
+      const leavingPlayer = room.players.find((p) => p.id === socketId);
       const before = room.players.length;
       room.players = room.players.filter((p) => p.id !== socketId);
 
       if (room.screenId === socketId) {
         room.screenId = undefined;
+      }
+
+      if (leavingPlayer?.role === 'host') {
+        const nextHost = room.players.find((p) => p.role !== 'screen');
+        if (nextHost) {
+          nextHost.role = 'host';
+        }
       }
 
       const after = room.players.length;

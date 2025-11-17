@@ -1,9 +1,10 @@
-export type PlayerRole = 'screen' | 'controller';
+export type PlayerRole = 'screen' | 'host' | 'controller';
 
 export interface Player {
   id: string;       // socket.id
   name?: string;
   role: PlayerRole;
+  ready?: boolean;
 }
 
 export interface Room {

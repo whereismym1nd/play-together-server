@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { BilliardsGateway } from "./billiards/billiards.gateway";
+import { BilliardsGateway } from "../billiards/billiards.gateway";
 import { GameType } from "src/rooms/rooms.types";
 
 @Injectable()
@@ -8,10 +8,10 @@ export class GameRouterService {
     private readonly billiardsGateway: BilliardsGateway,
   ) { }
 
-  route(gameType: GameType, ctx: GameContext) {
+  route(gameType: GameType, ctx: unknown) {
     switch (gameType) {
       case 'billiards':
-        this.billiardsGateway.handleGameEvent(ctx);
+        // this.billiardsGateway.handleGameEvent(ctx);
         break;
     }
   }
