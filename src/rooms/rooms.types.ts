@@ -5,13 +5,18 @@ export interface Player {
   name?: string;
   role: PlayerRole;
   ready?: boolean;
+  offline?: boolean;
 }
 
 export interface Room {
   id: string;           // код комнаты
   screenId?: string;    // socket.id экрана
+  hostId?: string;      // socket.id хоста
   players: Player[];    // включая экран (если хочешь)
   gameType?: GameType;
 }
 
 export type GameType = 'billiards' | 'chess';
+
+
+export type Target = 'host' | 'screen' | 'all' | string | Array<'host' | 'screen' | 'all' | string>;
