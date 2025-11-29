@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { RoomsService } from './rooms.service';
 import { GameRouterService } from 'src/games/gamesCore/gamesRouter.service';
 import { nanoid } from 'nanoid';
-import { PlayerRole, Target } from './rooms.types';
+import { GameType, PlayerRole, Target } from './rooms.types';
 
 type SessionRecord = {
   sessionId: string;
@@ -51,14 +51,14 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) { }
 
   handleConnection(client: Socket) {
-    console.log('client connected', client.id);
+
     const incomingSessionId = client.handshake.auth?.sessionId as string | undefined;
     const existing = incomingSessionId ? sessions.get(incomingSessionId) : null;
 
     const sessionId = existing?.sessionId ?? nanoid();
     client.emit('session', { sessionId });
     client.data.sessionId = sessionId;
-    console.log('existing', existing);
+
 
 
     const session = saveSession(sessionId, {
@@ -69,31 +69,31 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       socketId: client.id,
     });
 
-    console.log("session", session);
 
 
-    if (session.roomId) {
-      console.log('has session.roomId', session.roomId);
+    const room = session.roomId ? this.roomsService.getRoom(session.roomId) : undefined;
+    const canReconnect = room && ['gameSelect', 'inGame'].includes(room.stage);
 
-      const room = this.roomsService.reconnectPlayer({
-        roomId: session.roomId,
+    if (canReconnect) {
+      const restored = this.roomsService.reconnectPlayer({
+        roomId: room.id,
         oldSocketId: existing?.socketId,
         newSocketId: client.id,
         role: session.role,
         name: session.name,
       });
-
-      if (room) {
-        console.log('reconnect');
-
+      if (restored) {
         client.join(room.id);
         this.emitRoomUpdate(room.id, ['host', 'screen', client.id]);
       }
     }
+
+    console.log('rooms', this.roomsService.rooms);
+
   }
 
   handleDisconnect(client: Socket) {
-    console.log('client disconnected', client.id);
+
     const sessionId = client.data.sessionId as string | undefined;
     if (sessionId) {
       const existing = sessions.get(sessionId);
@@ -167,7 +167,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const player = room.players.find((p) => p.id === socket.id);
 
     if (sessionId && player) {
-      console.log('haveSession id and save: /n /n', socket.id);
+
 
       saveSession(sessionId, {
         sessionId,
@@ -179,7 +179,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     this.emitRoomUpdate(roomId, ['host', 'screen', socket.id]);
 
-    console.log('sessions:', sessions);
+
 
     return { success: true };
   }
@@ -188,12 +188,12 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('player:ready')
   handleSetPlayerReady(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
+    @MessageBody() payload: { ready: boolean; roomId: string },
   ) {
-    const { ready } = payload;
+    const { ready, roomId } = payload;
 
     this.roomsService.setReady(client.id, ready);
-    const room = this.roomsService.getRoomBySocket(client.id);
+    const room = this.roomsService.getRoom(roomId);
 
     if (room) {
       this.emitRoomUpdate(room.id, ['host', 'screen', client.id]);
@@ -207,7 +207,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: { roomId: string }
   ) {
     const { roomId } = data;
-    const room = this.roomsService.getRoomBySocket(client.id);
+    const room = this.roomsService.getRoom(roomId);
     if (!roomId || !room) return;
 
     const isAllReady = this.roomsService.checkAllReady(roomId);
@@ -220,7 +220,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (targetIds.length) {
       this.server.to(targetIds).emit('room:startGameSelect');
     }
-
+    this.roomsService.setStage(room.id, 'select');
     return { success: true };
   }
 
@@ -239,12 +239,12 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('gameSelect:confirm')
   handleGameSelectConfirm(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string },
+    @MessageBody() data: { roomId: string, gameType: GameType },
   ) {
-    const room = this.roomsService.getRoomBySocket(client.id);
+    const room = this.roomsService.setGameType(data.roomId, data.gameType);
     if (!room || room.id !== data.roomId) return;
     if (!room.screenId) return;
-    this.server.to(room.screenId).emit('gameSelect:confirm');
+    this.emitRoomUpdate(room.id, 'all');
   }
 
   @SubscribeMessage('game-event')

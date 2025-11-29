@@ -14,7 +14,10 @@ export interface Room {
   hostId?: string;      // socket.id хоста
   players: Player[];    // включая экран (если хочешь)
   gameType?: GameType;
+  stage: StageType;
 }
+
+export type StageType = "lobby" | "select" | "game";
 
 export type GameType = 'billiards' | 'chess';
 

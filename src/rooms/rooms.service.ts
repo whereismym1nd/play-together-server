@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { GameType, PlayerRole, Room } from './rooms.types';
+import { GameType, PlayerRole, Room, StageType } from './rooms.types';
 
 @Injectable()
 export class RoomsService {
-  private rooms = new Map<string, Room>();
+  rooms = new Map<string, Room>();
 
   serializeRoom(room: Room) {
     return {
@@ -29,6 +29,7 @@ export class RoomsService {
     const room: Room = {
       id: roomId,
       screenId: screenSocketId,
+      stage: "lobby",
       players: [
         {
           id: screenSocketId,
@@ -84,12 +85,12 @@ export class RoomsService {
   }): Room | null {
     const { roomId, oldSocketId, newSocketId, role, name } = params;
     const room = this.rooms.get(roomId);
-    console.log('params', params);
+
 
     if (!room) return null;
 
     if (oldSocketId) {
-      console.log('oldSocketId', oldSocketId);
+
 
       const player = room.players.find((p) => p.id === oldSocketId);
       if (player) {
@@ -104,7 +105,7 @@ export class RoomsService {
     if (role) {
       return this.joinRoom(roomId, newSocketId, role, name);
     }
-    console.log('nothin found');
+
 
     return null;
   }
@@ -127,14 +128,16 @@ export class RoomsService {
 
   leaveRoom(socketId: string, options?: { forceRemove?: boolean }): Room | null {
     for (const room of this.rooms.values()) {
-      console.log('players', room.players);
-
       const leavingPlayer = room.players.find((p) => p.id === socketId);
       if (!leavingPlayer) continue;
 
       if (!options?.forceRemove) {
         leavingPlayer.ready = false;
         leavingPlayer.offline = true;
+        const hasOnline = room.players.some((p) => !p.offline);
+        if (!hasOnline) {
+          this.rooms.delete(room.id);
+        }
         return room;
       }
 
@@ -158,7 +161,7 @@ export class RoomsService {
       const after = room.players.length;
 
       if (after === 0) {
-        console.log('room deleted');
+
 
         this.rooms.delete(room.id);
         return room;
@@ -173,6 +176,22 @@ export class RoomsService {
 
   getRoom(roomId: string): Room | undefined {
     return this.rooms.get(roomId);
+  }
+
+  setStage(roomId: string, stage: StageType): Room | null {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    room.stage = stage;
+    return room;
+  }
+
+  setGameType(roomId: string, gameType: GameType) {
+    const room = this.rooms.get(roomId);
+    if (room && gameType) {
+      room.gameType = gameType
+      this.setStage(roomId, 'game');
+    };
+    return room;
   }
 
   assignGame(roomId: string, gameType: GameType) {

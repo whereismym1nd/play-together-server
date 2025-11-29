@@ -30,7 +30,7 @@ export class BilliardsGateway {
       angle: number; // в радианах или градусах — выберем сами
     },
   ) {
-    console.log('aiming');
+
 
     const { roomId, power, angle } = data;
     // без логики — просто ретрансляция
