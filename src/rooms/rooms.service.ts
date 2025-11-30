@@ -86,17 +86,17 @@ export class RoomsService {
     const { roomId, oldSocketId, newSocketId, role, name } = params;
     const room = this.rooms.get(roomId);
 
-
     if (!room) return null;
-
     if (oldSocketId) {
-
 
       const player = room.players.find((p) => p.id === oldSocketId);
       if (player) {
         player.id = newSocketId;
         player.offline = false;
-        if (room.hostId === oldSocketId) room.hostId = newSocketId;
+        if (room.hostId === oldSocketId) {
+          room.hostId = newSocketId;
+          player.ready = true;
+        }
         if (room.screenId === oldSocketId) room.screenId = newSocketId;
         return room;
       }
@@ -105,7 +105,6 @@ export class RoomsService {
     if (role) {
       return this.joinRoom(roomId, newSocketId, role, name);
     }
-
 
     return null;
   }
@@ -172,6 +171,17 @@ export class RoomsService {
       }
     }
     return null;
+  }
+
+  renamePlayer(roomId: string, socketId: string, name: string): Room | null {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+
+    const player = room.players.find((p) => p.id === socketId);
+    if (!player) return null;
+
+    player.name = name;
+    return room;
   }
 
   getRoom(roomId: string): Room | undefined {

@@ -51,17 +51,15 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) { }
 
   handleConnection(client: Socket) {
-
     const incomingSessionId = client.handshake.auth?.sessionId as string | undefined;
+    const requestedRoomId = client.handshake.auth?.roomId as string | undefined;
     const existing = incomingSessionId ? sessions.get(incomingSessionId) : null;
 
     const sessionId = existing?.sessionId ?? nanoid();
     client.emit('session', { sessionId });
     client.data.sessionId = sessionId;
 
-
-
-    const session = saveSession(sessionId, {
+    let session = saveSession(sessionId, {
       sessionId,
       roomId: existing?.roomId,
       role: existing?.role,
@@ -69,10 +67,18 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       socketId: client.id,
     });
 
-
+    if (requestedRoomId && session.roomId && requestedRoomId !== session.roomId) {
+      session = saveSession(sessionId, {
+        roomId: undefined,
+        role: undefined,
+        name: undefined,
+      });
+    }
 
     const room = session.roomId ? this.roomsService.getRoom(session.roomId) : undefined;
-    const canReconnect = room && ['gameSelect', 'inGame'].includes(room.stage);
+    const canReconnect = room
+      && (!requestedRoomId || requestedRoomId === room.id)
+      && ['lobby', 'select', 'game'].includes(room.stage);
 
     if (canReconnect) {
       const restored = this.roomsService.reconnectPlayer({
@@ -89,11 +95,9 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     console.log('rooms', this.roomsService.rooms);
-
   }
 
   handleDisconnect(client: Socket) {
-
     const sessionId = client.data.sessionId as string | undefined;
     if (sessionId) {
       const existing = sessions.get(sessionId);
@@ -198,6 +202,23 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (room) {
       this.emitRoomUpdate(room.id, ['host', 'screen', client.id]);
     }
+  }
+
+  @SubscribeMessage('player:rename')
+  handleRename(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: string; name: string },
+  ): { success: boolean; message?: string } | void {
+    const { roomId, name } = payload;
+    const trimmed = (name ?? '').trim();
+    if (!trimmed) return { success: false, message: 'empty name' };
+
+    const room = this.roomsService.renamePlayer(roomId, client.id, trimmed);
+    if (room) {
+      this.emitRoomUpdate(room.id, ['host', 'screen', room.id]);
+      return { success: true };
+    }
+    return { success: false, message: 'room or player not found' };
   }
 
   @SubscribeMessage('room:start')
