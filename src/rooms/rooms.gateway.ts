@@ -242,6 +242,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(targetIds).emit('room:startGameSelect');
     }
     this.roomsService.setStage(room.id, 'select');
+    this.emitRoomUpdate(room.id, 'all');
     return { success: true };
   }
 

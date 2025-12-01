@@ -26,6 +26,7 @@
     "@nestjs/platform-socket.io": "^11.1.9",
     "@nestjs/websockets": "^11.1.9",
     "nanoid": "^5.1.6",
+    "planck": "^1.4.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

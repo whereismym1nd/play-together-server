@@ -8,10 +8,10 @@ export class GameRouterService {
     private readonly billiardsGateway: BilliardsGateway,
   ) { }
 
-  route(gameType: GameType, ctx: unknown) {
+  route(gameType: GameType, ctx: any) {
     switch (gameType) {
       case 'billiards':
-        // this.billiardsGateway.handleGameEvent(ctx);
+        this.billiardsGateway.handleGameEvent(ctx);
         break;
     }
   }
